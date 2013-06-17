@@ -46,18 +46,23 @@ def main():
     bus_gen_dict = {group_stars.index[i]: group_stars[i] for i in range(len(group_stars))}
     count_dict = {group_counts.index[i]: group_counts[i] for i in range(len(group_counts))}
     
-    user_review_groups = all_data[rte_mask].groupby(['user_id'])
-    user_review_counts = user_review_groups['stars_x'].count()
-    user_review_dict = {user_review_counts.index[i]: user_review_counts[i] for i in range(len(user_review_counts))}
+    #user_review_groups = all_data[rte_mask].groupby(['user_id'])
+    #user_review_counts = user_review_groups['stars_x'].count()
+    #user_review_dict = {user_review_counts.index[i]: user_review_counts[i] for i in range(len(user_review_counts))}
     
     # Averages for all male users and all female users
-    groupsmf = review_test_ext.groupby(['mf'])
-    group_stars_mf = groupsmf['stars'].mean()
+    mask_mf = user_all['user_id'].map(lambda x: x in review_test['user_id'].values)
+    test_mf = user_all[mask_mf]
+    groupsmf = test_mf.groupby(['mf'])
+    group_stars_mf = groupsmf['average_stars'].mean()
     
-    datu2 = review_test_ext['average_stars'].values
-    avg_stars_all_u = np.mean(np.ma.masked_array(datu2,np.isnan(datu2)))
-    datb2 = review_test_ext['stars'].values
-    avg_stars_all_b = np.mean(np.ma.masked_array(datb2,np.isnan(datb2)))
+    #groupsmf_other = review_test_ext.groupby(['mf'])
+    #group_stars_mf_other = groupsmf_other['stars'].mean()
+    
+    #datu2 = review_test_ext['average_stars'].values
+    #avg_stars_all_u = np.mean(np.ma.masked_array(datu2,np.isnan(datu2)))
+    #datb2 = review_test_ext['stars'].values
+    #avg_stars_all_b = np.mean(np.ma.masked_array(datb2,np.isnan(datb2)))
 
 
     # this is what I did in my benchmark- not sure why it gives a better answer?
@@ -72,14 +77,22 @@ def main():
     mdatb = np.ma.masked_array(datb,np.isnan(datb))
     old_avg_stars_b = np.mean(mdatb)
 
+    # Averages by (business_id, gender) pairs
+    rte_mask = all_data['stars_x'].map(lambda x: not np.isnan(x))
+    groups = all_data[rte_mask].groupby(['business_id','mf'])
+    group_counts = groups['user_id'].count()
+    group_stars = groups['stars_x'].mean()
+    bus_gen_dict = {group_stars.index[i]: group_stars[i] for i in range(len(group_stars))}
+    count_dict = {group_counts.index[i]: group_counts[i] for i in range(len(group_counts))}
+
 
     test_pairs = [tuple(x) for x in review_test_ext[['user_id','business_id','average_stars','stars', 'mf']].values]
 
-    with open('C:/Users/rthomas/Desktop/Kaggle/Sysrec/genderbenchmark3.csv', 'wb') as csvfile:
+    with open('C:/Users/rthomas/Desktop/Kaggle/Sysrec/genderbenchmark5.csv', 'wb') as csvfile:
         mywriter = csv.writer(csvfile, delimiter=',', quotechar=' ', quoting=csv.QUOTE_MINIMAL)
         # for testing:
-        #mywriter.writerow(['avg m', 'avg f', 'all u', 'old all u', 'all b', 'old all b'])
-        #mywriter.writerow([group_stars_mf['m'], group_stars_mf['f'], avg_stars_all_b, old_avg_stars_u, avg_stars_all_u, old_avg_stars_b])
+        #mywriter.writerow(['avg m', 'avg f', 'old m', 'old f'])
+        #mywriter.writerow([group_stars_mf['m'], group_stars_mf['f'], group_stars_mf_other['m'], group_stars_mf_other['f']])
         #mywriter.writerow(['user_id', 'business_id', 'reviews this u', 'stars this u', 'stars this b', 'mf', 'stars', 'what'])
         mywriter.writerow(['user_id', 'business_id', 'stars'])
         for r in test_pairs:
@@ -92,10 +105,14 @@ def main():
             #if uid in user_review_dict.keys():
             #    rev_this_u = user_review_dict[uid]
             # check if we can infer the user's gender
-            if mf in ('m','f') and (bid, mf) in bus_gen_dict.keys() and count_dict[(bid, mf)] >= 22:
-                # check if there is an average rating by gender for this business (with at least 22 users having rated it)
-                stars = bus_gen_dict[(bid, mf)]
-                what = 'bus_gen_dict'
+            if mf in ('m','f') and (bid, mf) in bus_gen_dict.keys() and count_dict[(bid, mf)] >= 20:
+                # check if there is an average rating by gender for this business (with at least 20 users having rated it)
+                if not np.isnan(stars_this_u):
+                    stars = bus_gen_dict[(bid, mf)] + (stars_this_u - group_stars_mf[mf])
+                    what = 'option 1'
+                else:
+                    stars = bus_gen_dict[(bid, mf)]
+                    what = 'option 2'
                 # check if there is an average rating for the business
             elif not np.isnan(stars_this_b):
                 # check if there is an average rating for this user
